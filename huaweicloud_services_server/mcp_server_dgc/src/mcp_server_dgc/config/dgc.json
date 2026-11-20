@@ -3,8 +3,9 @@
   "info" : {
     "description" : "DGC-连接相关的API",
     "title" : "DGC",
-    "version" : "2025-06-13",
-    "x-host_prefix": "dayu"
+    "version" : "2026-11-20",
+    "x-host_prefix": "dayu",
+    "x-host" : "dayu.{region}.myhuaweicloud.com"
   },
   "servers" : [ {
     "url" : "/"
@@ -106,6 +107,10 @@
               "$ref" : "#/components/schemas/JobApprover"
             },
             "description" : "在开启审批开关后,需要填写该字段,表示脚本审批人"
+          },
+          "version" : {
+            "type" : "integer",
+            "description" : "Script version."
           }
         },
         "required" : [ "name", "type", "content" ],
@@ -294,7 +299,7 @@
           },
           "type" : {
             "type" : "string",
-            "enum" : [ "HiveSQL", "SparkSQL", "DWSSQL", "DLISQL", "Shell", "CDMJob", "DISTransferTask", "CSJob", "CloudTableManage", "OBSManager", "RESTAPI", "MachineLearning", "SMN", "MRSSpark", "MapReduce", "DLISpark", "MRSFlink", "MRSFlinkJob", "MRSHetuEngine", "RDS SQL", "DataMigration", "OneclickCDC", "Dummy" ],
+            "enum" : [ "HiveSQL", "SparkSQL", "DWSSQL", "DLISQL", "Shell", "CDMJob", "DISTransferTask", "CSJob", "CloudTableManager", "OBSManager", "RESTAPI", "MachineLearning", "SMN", "MRSSpark", "MapReduce", "DLISpark", "MRSFlinkJob", "DataMigration", "OneclickCDC", "Dummy", "MRSSparkPython", "HetuEngineSQL", "RDSSQL" ],
             "description" : "节点的类型"
           },
           "location" : {
@@ -581,6 +586,13 @@
               "type" : "string"
             },
             "description" : "作业标签列表"
+          },
+          "taskPriority" : {
+            "type" : "integer",
+            "minimum" : 0,
+            "maximum" : 2,
+            "default" : 0,
+            "description" : "Job priority: 0 high, 1 medium, 2 low. Added in Huawei SDK 3.1.217."
           }
         },
         "type" : "object"
@@ -594,7 +606,7 @@
           "status" : {
             "type" : "string",
             "description" : "实例运行状态:",
-            "enum" : [ "waiting", "running", "success", "fail", "running-exception", "pause", "manual-stop" ]
+            "enum" : [ "waiting", "running", "success", "fail", "running-exception", "pause", "manual-stop", "forceSuccess", "ignoreSuccess", "freeze", "skip-by-depend", "waiting-confirm" ]
           },
           "planTime" : {
             "type" : "integer",
@@ -867,7 +879,7 @@
           },
           "status" : {
             "type" : "string",
-            "enum" : [ "RUNNING", "SUCCESSFUL", "FAILED" ],
+            "enum" : [ "RUNNING", "SUCCESSFUL", "FAILED", "WARNING" ],
             "description" : "作业运行状态 RUNNING:运行中 SUCCESSFUL:运行成功 FAILED:运行失败"
           },
           "message" : {
@@ -904,7 +916,7 @@
           },
           "status" : {
             "type" : "string",
-            "enum" : [ "RUNNING", "SUCCESSFUL", "FAILED" ],
+            "enum" : [ "RUNNING", "SUCCESSFUL", "FAILED", "WARNING" ],
             "description" : "作业运行状态 RUNNING:运行中 SUCCESSFUL:运行成功 FAILED:运行失败"
           },
           "message" : {
@@ -928,7 +940,7 @@
           },
           "status" : {
             "type" : "string",
-            "enum" : [ "STARTTING", "NORMAL", "EXCEPTION", "STOPPING", "STOPPED" ]
+            "enum" : [ "NORMAL", "EXCEPTION", "STOPPING", "STOPPED", "STARTING", "PAUSE", "ABNORMAL", "DISABLE", "OVERLOAD", "INIT" ]
           },
           "starttime" : {
             "type" : "string"
@@ -945,6 +957,12 @@
             "items" : {
               "$ref" : "#/components/schemas/RealTimeNodeStatus"
             }
+          },
+          "lastModifiyUser" : {
+            "type" : "string"
+          },
+          "createUser" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -956,14 +974,23 @@
           },
           "status" : {
             "type" : "string",
-            "enum" : [ "STARTTING", "NORMAL", "EXCEPTION", "STOPPING", "STOPPED" ]
+            "enum" : [ "NORMAL", "EXCEPTION", "STOPPING", "STOPPED", "STARTING", "PAUSE", "ABNORMAL", "DISABLE", "OVERLOAD", "INIT" ]
           },
           "logPath" : {
             "type" : "string"
           },
           "nodeType" : {
             "type" : "string",
-            "enum" : [ "HiveSQL", "SparkSQL", "DWSSQL", "DLISQL", "Shell", "CDMJob", "DISTransferTask", "CSJob", "CloudTableManage", "OBSManager", "RESTAPI", "MachineLearning", "SMN", "MRSSpark", "MapReduce", "DLISpark" ]
+            "enum" : [ "HiveSQL", "SparkSQL", "DWSSQL", "DLISQL", "Shell", "CDMJob", "DISTransferTask", "CSJob", "CloudTableManager", "OBSManager", "RESTAPI", "MachineLearning", "SMN", "MRSSpark", "MapReduce", "DLISpark" ]
+          },
+          "lastInstanceStatus" : {
+            "type" : "string"
+          },
+          "runningData" : {
+            "type" : "string"
+          },
+          "extendCounter" : {
+            "type" : "string"
           }
         },
         "type" : "object"
@@ -1134,6 +1161,15 @@
           "exportDepend" : {
             "type" : "boolean",
             "description" : "是否导出作业依赖的脚本和资源"
+          },
+          "obsPath" : {
+            "type" : "string",
+            "description" : "OBS destination when exporting to OBS."
+          },
+          "exportStatus" : {
+            "type" : "string",
+            "enum" : [ "DEVELOP", "SUBMIT" ],
+            "description" : "Export saved development or submitted jobs; defaults to DEVELOP."
           }
         },
         "type" : "object"
@@ -1614,7 +1650,9 @@
             }
           },
           "required" : true
-        }
+        },
+        "deprecated" : true,
+        "description" : "创建连接 Legacy Factory connection API; Huawei documents this API group as no longer maintained. Use Management Center data-connection APIs. Retained for compatibility."
       },
       "x-method" : "post",
       "x-content-type" : "application/json;charset=UTF-8",
@@ -1938,7 +1976,7 @@
           "schema" : {
             "description" : "实例运行状态:",
             "type" : "string",
-            "enum" : [ "waiting", "running", "success", "fail", "running-exception", "pause", "manual-stop" ]
+            "enum" : [ "waiting", "running", "success", "fail", "running-exception", "pause", "manual-stop", "forceSuccess", "ignoreSuccess", "freeze", "skip-by-depend", "waiting-confirm" ]
           }
         }, {
           "name" : "preciseQuery",
@@ -2075,7 +2113,9 @@
             }
           },
           "required" : true
-        }
+        },
+        "deprecated" : true,
+        "description" : "导入连接 Legacy Factory connection API; Huawei documents this API group as no longer maintained. Use Management Center data-connection APIs. Retained for compatibility."
       },
       "x-method" : "post",
       "x-content-type" : "application/json;charset=UTF-8",
@@ -2641,7 +2681,9 @@
             "description" : "连接名称.",
             "type" : "string"
           }
-        } ]
+        } ],
+        "deprecated" : true,
+        "description" : "查询连接详情 Legacy Factory connection API; Huawei documents this API group as no longer maintained. Use Management Center data-connection APIs. Retained for compatibility."
       },
       "x-method" : "get",
       "x-content-type" : "application/json;charset=UTF-8",
@@ -2797,7 +2839,9 @@
             "description" : "连接名称.",
             "type" : "string"
           }
-        } ]
+        } ],
+        "deprecated" : true,
+        "description" : "删除连接 Legacy Factory connection API; Huawei documents this API group as no longer maintained. Use Management Center data-connection APIs. Retained for compatibility."
       },
       "x-method" : "delete",
       "x-content-type" : "application/json;charset=UTF-8",
@@ -2920,7 +2964,9 @@
             "description" : "连接名称.",
             "type" : "string"
           }
-        } ]
+        } ],
+        "deprecated" : true,
+        "description" : "查询连接列表 Legacy Factory connection API; Huawei documents this API group as no longer maintained. Use Management Center data-connection APIs. Retained for compatibility."
       },
       "x-method" : "get",
       "x-content-type" : "application/json;charset=UTF-8",
@@ -2955,7 +3001,9 @@
             "description" : "项目编号.",
             "type" : "string"
           }
-        } ]
+        } ],
+        "deprecated" : true,
+        "description" : "导出连接 Legacy Factory connection API; Huawei documents this API group as no longer maintained. Use Management Center data-connection APIs. Retained for compatibility."
       },
       "x-method" : "post",
       "x-content-type" : "application/json;charset=UTF-8",
@@ -3009,7 +3057,9 @@
             }
           },
           "required" : true
-        }
+        },
+        "deprecated" : true,
+        "description" : "修改连接 Legacy Factory connection API; Huawei documents this API group as no longer maintained. Use Management Center data-connection APIs. Retained for compatibility."
       },
       "x-method" : "put",
       "x-content-type" : "application/json;charset=UTF-8",
@@ -3625,6 +3675,14 @@
             "description" : "返回下游依赖当前作业的作业,只返回第一层。",
             "type" : "boolean",
             "default" : false
+          }
+        }, {
+          "name" : "getJobSubmitVersion",
+          "in" : "query",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "description" : "When version is omitted, true selects the latest submitted version; false selects the latest saved version."
           }
         } ]
       },

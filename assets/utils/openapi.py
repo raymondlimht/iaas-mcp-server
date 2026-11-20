@@ -61,8 +61,8 @@ class SwaggerRefResolver:
             return deepcopy(self.cache[ref_uri])
 
         if ref_uri in self.processing_stack:
-            logger.error(f"检测到循环引用: {ref_uri}")
-            return {"$ref_cycle_detected": ref_uri}
+            # Recursive catalog/filter models must retain their constraints.
+            return {"$ref": ref_uri}
 
         self.processing_stack.add(ref_uri)
 
@@ -184,6 +184,7 @@ class OpenAPIToToolsConverter:
             tool_name = self._determine_tool_name(method, path, operation)
             tool_description = self._determine_tool_description(method, path, operation)
             tool_parameters = self._build_tool_parameters(path_parameters, operation)
+            self._attach_recursive_definitions(tool_parameters)
 
             return Tool(
                 name=tool_name,
@@ -196,6 +197,32 @@ class OpenAPIToToolsConverter:
         except Exception as e:
             logger.error(f"创建工具失败: {method.upper()} {path}: {e}")
             return None
+
+    def _attach_recursive_definitions(self, schema: dict[str, Any]) -> None:
+        """Make retained OpenAPI references local to this tool's JSON Schema."""
+        definitions = {}
+        prefix = "#/components/schemas/"
+
+        def visit(node):
+            if isinstance(node, list):
+                for value in node:
+                    visit(value)
+            elif isinstance(node, dict):
+                ref = node.get("$ref", "")
+                if ref.startswith(prefix):
+                    name = ref[len(prefix) :]
+                    node["$ref"] = f"#/$defs/{name}"
+                    if name not in definitions:
+                        definitions[name] = deepcopy(
+                            self.resolved_openapi["components"]["schemas"][name]
+                        )
+                        visit(definitions[name])
+                for value in node.values():
+                    visit(value)
+
+        visit(schema)
+        if definitions:
+            schema["$defs"] = definitions
 
     def _determine_tool_name(
         self, method: str, path: str, operation: Dict[str, Any]
@@ -260,11 +287,21 @@ class OpenAPIToToolsConverter:
                 not isinstance(param_name, str)
                 or not isinstance(param_in, str)
                 or param_name in processed_parameters
-                or param_in not in ["path", "query"]
+                or param_in not in ["path", "query", "header"]
             ):
                 continue
 
-            param_schema = param_def.get("schema")
+            # Authentication and transport headers are supplied by the SDK.
+            if param_in == "header" and param_name.lower() in {
+                "x-auth-token",
+                "authorization",
+                "host",
+                "x-sdk-date",
+                "content-type",
+            }:
+                continue
+
+            param_schema = deepcopy(param_def.get("schema"))
             if (
                 not isinstance(param_schema, dict)
                 or "$ref_cycle_detected" in param_schema
@@ -275,6 +312,11 @@ class OpenAPIToToolsConverter:
                 param_schema["description"] = param_def.get("description")
 
             param_schema["in"] = param_in
+            if param_schema.get("type") == "array":
+                param_schema["collectionFormat"] = param_def.get(
+                    "collectionFormat",
+                    "multi" if param_def.get("explode", True) else "csv",
+                )
             parameter_properties[param_name] = param_schema
             if param_def.get("required", False) or param_in == "path":
                 required_parameters.add(param_name)
@@ -301,14 +343,57 @@ class OpenAPIToToolsConverter:
         if not isinstance(content, dict):
             return
 
-        media_type_obj = content.get("application/json") or content.get(
-            "application/x-www-form-urlencoded"
+        media_type_obj = next(
+            (
+                value
+                for media_type, value in content.items()
+                if media_type.split(";", 1)[0]
+                in {
+                    "application/json",
+                    "application/x-www-form-urlencoded",
+                    "multipart/form-data",
+                }
+            ),
+            None,
         )
 
         if not isinstance(media_type_obj, dict):
             return
 
         body_schema = media_type_obj.get("schema")
+        if not isinstance(body_schema, dict):
+            return
+        body_schema = deepcopy(body_schema)
+        for prop_schema in body_schema.get("properties", {}).values():
+            if prop_schema.get("format") == "binary":
+                prop_schema.clear()
+                prop_schema.update(
+                    {
+                        "type": "object",
+                        "description": "File name and base64-encoded file contents.",
+                        "properties": {
+                            "filename": {"type": "string"},
+                            "data": {"type": "string", "contentEncoding": "base64"},
+                        },
+                        "required": ["filename", "data"],
+                        "x-file": True,
+                    }
+                )
+        # Keep existing flat inputs unless a body would overwrite a path/header/query
+        # parameter, or cannot be represented by named top-level fields.
+        properties = body_schema.get("properties", {})
+        if (
+            not self._is_valid_body_schema(body_schema)
+            or not properties
+            or parameter_properties.keys() & properties.keys()
+        ):
+            body_name = "request_body"
+            while body_name in parameter_properties:
+                body_name = "_" + body_name
+            parameter_properties[body_name] = {**deepcopy(body_schema), "in": "body"}
+            if request_body.get("required", False):
+                required_parameters.add(body_name)
+            return
         if self._is_valid_body_schema(body_schema):
             self._process_body_properties(
                 body_schema, parameter_properties, required_parameters

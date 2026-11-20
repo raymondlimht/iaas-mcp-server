@@ -1,3 +1,5 @@
+import base64
+import io
 import json
 import os
 from pathlib import Path
@@ -7,6 +9,7 @@ import yaml
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkcore.client import Client, ClientBuilder
 from huaweicloudsdkcore.exceptions.exceptions import HostUnreachableException
+from huaweicloudsdkcore.http.formdata import FormFile
 from huaweicloudsdkcore.http.http_config import HttpConfig
 from huaweicloudsdkcore.region.region import Region
 from huaweicloudsdkcore.sdk_request import SdkRequest
@@ -16,6 +19,7 @@ from huaweicloudsdkcore.utils import http_utils
 from .model import MCPConfig, TransportType
 from .variable import (
     HUAWEI_ACCESS_KEY,
+    HUAWEI_REGION,
     HUAWEI_SECRET_KEY,
     MCP_SERVER_MODE,
     MCP_SERVER_PORT,
@@ -160,7 +164,7 @@ class CustomClient(Client):
         return response
 
 
-def create_api_client(ak, sk, x_host, region="cn-north-4"):
+def create_api_client(ak, sk, x_host, region="cn-north-4", project_id=None):
     endpoint = x_host
 
     if x_host.find("com") != -1:
@@ -169,7 +173,7 @@ def create_api_client(ak, sk, x_host, region="cn-north-4"):
     if endpoint.find("{region}") != -1:
         endpoint = endpoint.replace("{region}", region)
 
-    credentials = BasicCredentials(ak, sk)
+    credentials = BasicCredentials(ak, sk, project_id)
 
     http_config = HttpConfig()
     http_config.ignore_ssl_verification = True
@@ -187,7 +191,8 @@ def build_http_info(name, arguments, openapi_spec, mcp_tools):
     invoked_tool = next((tool for tool in mcp_tools if tool.name == name), None)
     if not invoked_tool:
         raise Exception(f"MCP工具({name})未找到")
-    method = openapi_spec.get("paths").get(f"/{name}").get("x-method")
+    operation = openapi_spec["paths"][f"/{name}"]
+    method = operation["x-method"].upper()
     resource_path = (
         openapi_spec.get("paths").get(f"/{name}").get("x-url").replace("{endpoint}", "")
     )
@@ -195,7 +200,7 @@ def build_http_info(name, arguments, openapi_spec, mcp_tools):
     cname = None
     collection_formats = {}
     path_params = {}
-    query_params = {}
+    query_params = []
     header_params = {}
     form_params = {}
     request_body = {}
@@ -204,24 +209,48 @@ def build_http_info(name, arguments, openapi_spec, mcp_tools):
     properties = invoked_tool.inputSchema.get("properties", {})
     for property_name, property_body in properties.items():
         if property_name in ["X-Auth-Token"]:
-            pass
+            continue
         elif (
             property_name in invoked_tool.inputSchema.get("required", [])
             and arguments.get(property_name) is None
         ):
             raise Exception(f"{property_name}为必填参数.")
 
+        if property_name not in arguments or arguments[property_name] is None:
+            continue
+        value = arguments[property_name]
+
         property_in = property_body.get("in")
         if property_in == "query":
-            query_params[property_name] = arguments.get(property_name)
+            if isinstance(value, list):
+                collection_format = property_body.get("collectionFormat", "multi")
+                if collection_format == "multi":
+                    query_params.extend((property_name, item) for item in value)
+                else:
+                    separator = {"csv": ",", "ssv": " ", "tsv": "\t", "pipes": "|"}[
+                        collection_format
+                    ]
+                    query_params.append(
+                        (property_name, separator.join(map(str, value)))
+                    )
+            else:
+                query_params.append((property_name, value))
         elif property_in == "path":
             path_params[property_name] = arguments.get(property_name)
         elif property_in == "header":
             header_params[property_name] = arguments.get(property_name)
+        elif property_in == "body":
+            request_body = value
         elif property_in is None:
-            request_body[property_name] = arguments.get(property_name)
+            if property_body.get("x-file"):
+                stream = io.BytesIO(base64.b64decode(value["data"], validate=True))
+                stream.name = value["filename"]
+                stream.mode = "rb"
+                request_body[property_name] = FormFile(stream)
+            else:
+                request_body[property_name] = value
     header_params["Content-Type"] = http_utils.select_header_content_type(
-        ["application/json;charset=UTF-8"]
+        [operation.get("x-content-type", "application/json;charset=UTF-8")]
     )
     http_info = {
         "method": method,
@@ -269,11 +298,13 @@ def load_config(config_path: Union[str, Path]) -> MCPConfig:
             port=config_dict.get("port", 8888),
             ak=config_dict.get("ak", ""),
             sk=config_dict.get("sk", ""),
+            region=config_dict.get("region", "cn-north-4"),
         )
 
         env_mapping = [
             (HUAWEI_ACCESS_KEY, "ak", None, None),
             (HUAWEI_SECRET_KEY, "sk", None, None),
+            (HUAWEI_REGION, "region", None, None),
             (MCP_SERVER_MODE, "transport", None, get_args(TransportType)),
             (MCP_SERVER_PORT, "port", int, None),
         ]
@@ -299,7 +330,7 @@ def load_config(config_path: Union[str, Path]) -> MCPConfig:
 def filter_parameters(params_dict):
     filtered_dict = {}
     for key, value in params_dict.items():
-        # 检查值是否不是 None 并且不是空列表
-        if value is not None and not (isinstance(value, list) and not value):
+        # Empty arrays, false and zero are meaningful API values.
+        if value is not None:
             filtered_dict[key] = value
     return filtered_dict

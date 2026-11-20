@@ -9,7 +9,26 @@ DataArtsStudio MCP Server is a Model Context Protocol (MCP) server that enables 
 
 ## Available Tools
 
-Covering the full API, available on demand. A list and status are as follows:
+The 2026-11-20 compatibility update provides 410 DataArtsStudio tools. See the
+[audit and complete operation ledger](AUDIT.md) for sources, Factory/CDM coverage,
+input corrections, and unresolved API and Bangkok verification gaps. The legacy
+table below is descriptive and is not a claim of live API verification.
+
+## Local startup (Bangkok)
+
+After installing this fork, set the existing `HUAWEI_ACCESS_KEY` and
+`HUAWEI_SECRET_KEY` environment variables, then start the server with:
+
+```sh
+HUAWEI_REGION=ap-southeast-2 mcp-server-dataartsstudio -t stdio
+```
+
+Provide the Bangkok `project_id` and the documented `workspace` value in tool
+arguments. Factory and Migration also use the existing `mcp-server-dgc`,
+`mcp-server-dlf`, and `mcp-server-cdm` commands. Tool discovery is verified locally;
+live Bangkok API access still requires suitable credentials and resources.
+
+## Legacy tool descriptions
 
 <html>
 <head></head>

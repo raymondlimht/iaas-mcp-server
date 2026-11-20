@@ -11,6 +11,7 @@ class MCPConfig:
     transport: TransportType
     ak: Optional[str] = None
     sk: Optional[str] = None
+    region: str = "cn-north-4"
 
     def check(self):
         if not self.service_code:

@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import contextlib
 import json
 import time
@@ -122,7 +123,7 @@ class MCPServer:
         async def call_tool(
             name: str, arguments: dict
         ) -> list[TextContent | ImageContent | EmbeddedResource]:
-            region = arguments.get("region") or "cn-north-4"
+            region = arguments.get("region") or self.config.region
             x_host = self.openapi_dict["info"]["x-host"]
 
             ak = self.config.ak
@@ -135,16 +136,39 @@ class MCPServer:
                 }
                 raise ToolError(error_msg)
 
-            client = create_api_client(ak, sk, x_host, region)
             try:
                 arguments = filter_parameters(arguments)
 
                 http_info = build_http_info(
                     name, arguments, self.openapi_dict, self.tools
                 )
+                client = create_api_client(
+                    ak,
+                    sk,
+                    x_host,
+                    region,
+                    project_id=http_info["path_params"].get("project_id"),
+                )
 
                 response = client.do_http_request(**http_info)
-                response_data = response.json() if response and response.content else {}
+                if response is None or not response.content:
+                    response_data = {}
+                else:
+                    content_type = response.headers.get("Content-Type", "")
+                    if content_type.startswith("text/"):
+                        response_data = response.text
+                    else:
+                        try:
+                            response_data = response.json()
+                        except ValueError:
+                            response_data = {
+                                "content_type": content_type
+                                or "application/octet-stream",
+                                "encoding": "base64",
+                                "data": base64.b64encode(response.content).decode(
+                                    "ascii"
+                                ),
+                            }
                 return [
                     TextContent(
                         type="text",

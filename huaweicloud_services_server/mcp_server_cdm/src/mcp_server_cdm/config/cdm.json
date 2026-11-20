@@ -3,7 +3,7 @@
   "info" : {
     "description" : "CDM-作业管理",
     "title" : "CDM",
-    "version" : "2025-09-02",
+    "version" : "2026-11-20",
     "x-host_prefix" : "cdm",
     "x-host" : "cdm.{region}.myhuaweicloud.com"
   },
@@ -56,11 +56,6 @@
             "type" : "integer",
             "format" : "int64",
             "example" : 1536916580005
-          },
-          "last-udpate-user" : {
-            "description" : "最后更新作业状态的用户",
-            "type" : "string",
-            "example" : "cdm"
           },
           "isDeleteJob" : {
             "description" : "作业执行完成后是否删除",
@@ -133,9 +128,14 @@
             "description" : "错误总结,当“status”为“FAILED”时才有此字段。",
             "type" : "string",
             "example" : "Submission has been stopped manually by user."
+          },
+          "last-update-user" : {
+            "description" : "最后更新作业状态的用户",
+            "type" : "string",
+            "example" : "cdm"
           }
         },
-        "required" : [ "progress", "job-name", "status", "creation-date", "creation-user", "isStopingIncrement", "last-update-date", "is-execute-auto", "last-udpate-user", "isDeleteJob", "isIncrementing", "external-id" ],
+        "required" : [ "progress", "job-name", "status", "creation-date", "creation-user", "isStopingIncrement", "last-update-date", "is-execute-auto", "last-update-user", "isDeleteJob", "isIncrementing", "external-id" ],
         "type" : "object"
       },
       "CdmQueryStatusResponseBody" : {
@@ -384,7 +384,8 @@
                 "type" : "boolean",
                 "example" : false
               }
-            }
+            },
+            "required" : [ "name", "vpcId" ]
           },
           "auto_remind" : {
             "description" : "选择是否开启消息通知。开启后,支持配置5个手机号码或邮箱,作业(目前仅支持表/文件迁移的作业)失败时、EIP异常时会发送短信或邮件通知用户",
@@ -1512,6 +1513,18 @@
             "description" : "集群状态:",
             "type" : "string",
             "example" : "200"
+          },
+          "eps_id" : {
+            "description" : "企业项目ID",
+            "type" : "string",
+            "example" : "0"
+          },
+          "tags" : {
+            "description" : "标签列表",
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ClusterTag"
+            }
           }
         },
         "required" : [ "version", "instances", "updated", "name", "created", "id", "status", "isFrozen" ],
@@ -1848,15 +1861,15 @@
             "format" : "int64",
             "example" : 1536916580005
           },
-          "last-udpate-user" : {
-            "description" : "最后更新作业状态的用户",
-            "type" : "string",
-            "example" : "cdm"
-          },
           "isDeleteJob" : {
             "description" : "作业执行完成后是否删除",
             "type" : "boolean",
             "example" : false
+          },
+          "last-update-user" : {
+            "description" : "最后更新作业状态的用户",
+            "type" : "string",
+            "example" : "cdm"
           }
         },
         "required" : [ "progress", "job-name", "status", "creation-date", "creation-user" ],
@@ -2413,6 +2426,47 @@
             "example" : "2d9ac57e-3ebf-4557-86d5-89ae750ff61c"
           }
         },
+        "type" : "object"
+      },
+      "ClusterTag" : {
+        "properties" : {
+          "value" : {
+            "description" : "标签键",
+            "type" : "string",
+            "example" : "test_tag"
+          },
+          "key" : {
+            "description" : "标签值",
+            "type" : "string",
+            "example" : "tag_value"
+          }
+        },
+        "required" : [ "key" ],
+        "type" : "object"
+      },
+      "CdmStopClusterReq" : {
+        "properties" : {
+          "stop" : {
+            "description" : "集群启动操作,定义集群启动标识,为空对象",
+            "type" : "object",
+            "properties" : {
+              "stopMode" : {
+                "description" : "关机类型:\n- IMMEDIATELY:立即关机。\n- GRACEFULLY:优雅关机。",
+                "type" : "string",
+                "example" : "IMMEDIATELY",
+                "enum" : [ "IMMEDIATELY", "GRACEFULLY" ]
+              },
+              "delayTime" : {
+                "description" : "关机时延,仅在stopMode为“GRACEFULLY”生效,单位:秒。该值为-1时,表示等待所有作业完成,并停止接受新作业。该值为大于0的任意值表示等待该时长后关机,并停止接受新作业。",
+                "type" : "integer",
+                "format" : "int32",
+                "example" : -1
+              }
+            },
+            "required" : [ "stopMode" ]
+          }
+        },
+        "required" : [ "stop" ],
         "type" : "object"
       }
     },
@@ -3836,7 +3890,7 @@
               }
             }
           },
-          "required" : true
+          "required" : false
         }
       },
       "x-method" : "put",
@@ -4468,6 +4522,91 @@
       "x-content-type" : "application/json;charset=UTF-8",
       "x-operationId" : "ShowInstanceDetail",
       "x-url" : "{endpoint}/v1.1/{project_id}/instances/{instance_id}"
+    },
+    "/StopCluster" : {
+      "post" : {
+        "summary" : "停止集群",
+        "description" : "停止集群接口。",
+        "tags" : [ "集群管理" ],
+        "operationId" : "StopCluster",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "project_id",
+          "description" : "项目ID",
+          "required" : true,
+          "schema" : {
+            "description" : "项目ID",
+            "type" : "string"
+          }
+        }, {
+          "in" : "path",
+          "name" : "cluster_id",
+          "description" : "集群ID",
+          "required" : true,
+          "schema" : {
+            "description" : "集群ID",
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "X-Auth-Token",
+          "description" : "用户Token。\n\n通过调用IAM服务获取用户Token接口获取(响应消息头中X-Subject-Token的值)。",
+          "required" : true,
+          "schema" : {
+            "description" : "用户Token。\n\n通过调用IAM服务获取用户Token接口获取(响应消息头中X-Subject-Token的值)。",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "examples" : {
+              "application/json" : {
+                "jobId" : [ "ff8080815e59d92d015e5b27ccb0004d" ]
+              }
+            },
+            "description" : "ok",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CdmStartAndStopClusterResponseBody"
+                }
+              }
+            }
+          },
+          "400" : {
+            "description" : "请求错误"
+          },
+          "401" : {
+            "description" : "鉴权失败"
+          },
+          "403" : {
+            "description" : "没有操作权限"
+          },
+          "404" : {
+            "description" : "找不到资源"
+          },
+          "500" : {
+            "description" : "服务内部错误,具体返回错误码请参考错误码"
+          },
+          "503" : {
+            "description" : "服务不可用"
+          }
+        },
+        "requestBody" : {
+          "required" : true,
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CdmStopClusterReq"
+              }
+            }
+          }
+        }
+      },
+      "x-method" : "post",
+      "x-content-type" : "application/json;charset=UTF-8",
+      "x-operationId" : "StopCluster",
+      "x-url" : "{endpoint}/v1.1/{project_id}/clusters/{cluster_id}/action"
     }
   }
 }

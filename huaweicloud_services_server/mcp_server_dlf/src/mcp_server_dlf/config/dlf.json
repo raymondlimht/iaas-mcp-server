@@ -3,7 +3,7 @@
   "info" : {
     "description" : "DLF-作业相关的API",
     "title" : "DLF",
-    "version" : "2025-09-02",
+    "version" : "2026-11-20",
     "x-host_prefix" : "dayu-dlf",
     "x-host" : "dayu-dlf.{region}.myhuaweicloud.com"
   },
@@ -20,7 +20,7 @@
           },
           "nodeType" : {
             "type" : "string",
-            "enum" : [ "HiveSQL", "SparkSQL", "DWSSQL", "DLISQL", "Shell", "CDMJob", "DISTransferTask", "CSJob", "CloudTableManage", "OBSManager", "RESTAPI", "MachineLearning", "SMN", "MRSSpark", "MapReduce", "DLISpark" ],
+            "enum" : [ "HiveSQL", "SparkSQL", "DWSSQL", "DLISQL", "Shell", "CDMJob", "DISTransferTask", "CSJob", "CloudTableManager", "OBSManager", "RESTAPI", "MachineLearning", "SMN", "MRSSpark", "MapReduce", "DLISpark" ],
             "description" : "节点的类型"
           },
           "location" : {
@@ -270,6 +270,13 @@
           "customFields" : {
             "type" : "object",
             "description" : "用户自定义属性字段"
+          },
+          "taskPriority" : {
+            "type" : "integer",
+            "minimum" : 0,
+            "maximum" : 2,
+            "default" : 0,
+            "description" : "Job priority: 0 high, 1 medium, 2 low. Added in Huawei SDK 3.1.217."
           }
         },
         "type" : "object"
@@ -427,7 +434,7 @@
           },
           "status" : {
             "type" : "string",
-            "enum" : [ "RUNNING", "SUCCESSFUL", "FAILED" ]
+            "enum" : [ "RUNNING", "SUCCESSFUL", "FAILED", "WARNING" ]
           }
         },
         "type" : "object"
@@ -451,7 +458,7 @@
           },
           "status" : {
             "type" : "string",
-            "enum" : [ "RUNNING", "SUCCESSFUL", "FAILED" ]
+            "enum" : [ "RUNNING", "SUCCESSFUL", "FAILED", "WARNING" ]
           },
           "message" : {
             "type" : "string"
@@ -744,7 +751,7 @@
           },
           "nodeType" : {
             "type" : "string",
-            "enum" : [ "HiveSQL", "SparkSQL", "DWSSQL", "DLISQL", "Shell", "CDMJob", "DISTransferTask", "CSJob", "CloudTableManage", "OBSManager", "RESTAPI", "MachineLearning", "SMN", "MRSSpark", "MapReduce", "DLISpark" ]
+            "enum" : [ "HiveSQL", "SparkSQL", "DWSSQL", "DLISQL", "Shell", "CDMJob", "DISTransferTask", "CSJob", "CloudTableManager", "OBSManager", "RESTAPI", "MachineLearning", "SMN", "MRSSpark", "MapReduce", "DLISpark" ]
           }
         },
         "type" : "object"
